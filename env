@@ -1,7 +1,0 @@
-UID = 
-SECRET = 
-
-API_BASE_URL = "https://api.intra.42.fr"
-TOKEN_URL = "https://api.intra.42.fr/oauth/token"
-REDIRECT_URL = "http://localhost:8000/auth/callback"  # 나중에 변경
-AUTH_URL = f"https://api.intra.42.fr/oauth/authorize?client_id={UID}&redirect_uri={REDIRECT_URL}&response_type=code"
