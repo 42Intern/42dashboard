@@ -9,6 +9,7 @@ UID = os.getenv("UID")
 SECRET = os.getenv("SECRET")
 REDIRECT_URL = os.getenv("REDIRECT_URL", "http://localhost:8000/auth/callback")  # 기본값 설정
 
-API_BASE_URL = "https://api.intra.42.fr"
-TOKEN_URL = "https://api.intra.42.fr/oauth/token"
-AUTH_URL = f"https://api.intra.42.fr/oauth/authorize?client_id={UID}&redirect_uri={REDIRECT_URL}&response_type=code"
+API_BASE_URL = "https://api.intra.42.fr/v2"
+API_BASE_URL = os.getenv("API_BASE_URL")
+TOKEN_URL = os.getenv("TOKEN_URL")
+AUTH_URL = os.getenv("AUTH_URL")
