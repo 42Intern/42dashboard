@@ -28,6 +28,19 @@ def create_layout():
 
         html.Hr(),
 
-        # API 응답 출력 (표 형식)
+        # API 응답 출력 (첫 번째 페이지만 표시)
         html.Div(id="api-response-table", style={"margin-top": "20px"}),
+
+        # "📥 CSV로 저장" 버튼 (첫 페이지 요청 후 표시)
+        html.Button("📥 CSV로 저장", id="save-csv", n_clicks=0,
+                    style={"margin-top": "10px", "display": "none"}),
+
+        # CSV 다운로드 링크를 dcc.Loading으로 감싸서 진행 중 상태 표시
+        dcc.Loading(
+            id="download-loading",
+            type="default",
+            custom_spinner=html.Div("다운로드중..."),
+            children=[dcc.Download(id="download-dataframe-csv")],
+            style={"margin-top": "10px"}
+        ),
     ])
