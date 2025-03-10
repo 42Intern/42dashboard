@@ -1,7 +1,12 @@
+import sys
+import os
 import requests
 import pandas as pd
 from datetime import datetime
 import calendar
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from config import API_BASE_URL, TOKEN_URL, UID, SECRET
 from api_utils import get_access_token
 

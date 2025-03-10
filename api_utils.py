@@ -6,73 +6,46 @@ from dash import dash_table, html
 
 # 1. 액세스 토큰을 가져오는 함수
 def get_access_token():
-    response = requests.post(TOKEN_URL, data={
-        "grant_type": "client_credentials",
-        "client_id": UID,
-        "client_secret": SECRET
-    })
+    data = {"grant_type": "client_credentials"}
+    response = requests.post(TOKEN_URL, data=data, auth=(UID, SECRET))
     if response.status_code == 200:
         return response.json().get("access_token")
-    print(f"❌ 액세스 토큰을 가져오지 못했습니다: {response.status_code}, {response.text}")
+    print(f"🔑 토큰 요청 실패: {response.status_code}, {response.text}")
     return None
 
-# 2. API 요청 및 데이터 변환
-def fetch_api_data(endpoint):
+# 2. 전체 페이지 데이터 가져오기
+def fetch_all_pages(endpoint, params=None):
+    """페이지네이션을 처리하여 API의 모든 데이터를 가져온다."""
     access_token = get_access_token()
     if not access_token:
         return "❌ 토큰을 가져오지 못했습니다."
-    
+    print(f"api 요청중입니다")
     headers = {"Authorization": f"Bearer {access_token}"}
     full_url = f"{API_BASE_URL}{endpoint}"
-    print(f"🔍 요청 URL: {full_url}")  # 디버깅용 로그
+    all_data = []
+    page = 1  # 첫 페이지부터 시작
 
-    response = requests.get(full_url, headers=headers)
-    if response.status_code == 200:
+    while True:
+        # 요청 URL 구성
+        page_params = params or {}
+        page_params["page"] = page  # 페이지 번호 추가
+        response = requests.get(full_url, headers=headers, params=page_params)
+
+        if response.status_code != 200:
+            print(f"❌ 응답 실패 (코드 {response.status_code}): {response.text}")
+            break  # 오류 발생 시 중단
+
         data = response.json()
-        return generate_table(data)
-    else:
-        return f"❌ 응답 실패 (코드 {response.status_code}): {response.text}"
+        if not data:
+            break  # 더 이상 데이터가 없으면 종료
 
-def remove_outer_quotes(value):
-    """문자열이 큰따옴표("")로 감싸져 있으면 바깥쪽 따옴표 제거"""
-    if isinstance(value, str) and value.startswith('"') and value.endswith('"'):
-        return value[1:-1]  # 앞뒤 따옴표 제거
-    return value
+        all_data.extend(data)  # 데이터를 리스트에 추가
+        page += 1  # 다음 페이지 요청
 
-def format_value(value, key):
-    """DataTable에 넣기 전에 값 변환"""
-    if isinstance(value, list):
-        # ✅ 리스트 데이터를 쉼표(,)로 구분된 문자열로 변환
-        return ", ".join(map(str, value))
+    print(f"api 요청완료")
+    return generate_table(all_data)
 
-    elif isinstance(value, dict):
-        # ✅ 딕셔너리를 JSON 문자열로 변환
-        return json.dumps(value, ensure_ascii=False)
-
-    elif isinstance(value, str):
-        # ✅ 이미지 URL인 경우 HTML <img> 태그로 변환
-        if key == "image" and value.startswith("http"):
-            return html.Img(src=value, style={"height": "50px"})  # 작은 이미지로 표시
-        return remove_outer_quotes(value)  # 바깥 따옴표 제거
-
-    return value  # 그대로 반환
-
-def flatten_data(data):
-    """API 응답 데이터를 DataTable에 넣을 수 있도록 변환"""
-    if isinstance(data, list):
-        flattened_data = []
-        for item in data:
-            flattened_item = {}
-            for key, value in item.items():
-                flattened_item[key] = format_value(value, key)  # ✅ 값 변환 함수 적용
-            flattened_data.append(flattened_item)
-        return flattened_data
-
-    elif isinstance(data, dict):
-        return [flatten_data([data])[0]]
-
-    return []
-
+# 3. DataTable 생성
 def generate_table(data):
     """API 데이터를 Dash DataTable로 변환"""
     processed_data = flatten_data(data)
@@ -89,3 +62,28 @@ def generate_table(data):
         style_header={"fontWeight": "bold"},
         page_size=10
     )
+
+# 4. 데이터 가공 함수
+def flatten_data(data):
+    """API 응답 데이터를 DataTable에 넣을 수 있도록 변환"""
+    if isinstance(data, list):
+        flattened_data = []
+        for item in data:
+            flattened_item = {key: format_value(value, key) for key, value in item.items()}
+            flattened_data.append(flattened_item)
+        return flattened_data
+
+    elif isinstance(data, dict):
+        return [flatten_data([data])[0]]
+
+    return []
+
+def format_value(value, key):
+    """값 변환 함수"""
+    if isinstance(value, list):
+        return ", ".join(map(str, value))
+    elif isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    elif isinstance(value, str) and key == "image" and value.startswith("http"):
+        return html.Img(src=value, style={"height": "50px"})
+    return value

@@ -2,8 +2,7 @@ from dash import Input, Output, State, ctx, html, dcc, ALL
 import dash.exceptions
 from api_categories import API_CATEGORIES
 import re
-from api_utils import get_access_token, generate_table
-import requests
+from api_utils import fetch_all_pages
 from config import API_BASE_URL
 
 def register_callbacks(app):
@@ -38,10 +37,10 @@ def register_callbacks(app):
     #
     @app.callback(
         [
-            Output("dynamic-inputs", "children"),  # 인자 입력 필드 표시
-            Output("selected-endpoint", "data"),   # 선택한 API 엔드포인트 저장
-            Output("send-request", "style"),       # "API 요청 보내기" 버튼 스타일
-            Output("api-response-table", "children")  # 결과 테이블
+            Output("dynamic-inputs", "children"),   # 인자 입력 필드 표시
+            Output("selected-endpoint", "data"),    # 선택한 API 엔드포인트 저장
+            Output("send-request", "style"),        # "API 요청 보내기" 버튼 스타일
+            Output("api-response-table", "children")# 결과 테이블
         ],
         [
             Input({"type": "api-button", "index": ALL}, "n_clicks"),
@@ -65,13 +64,13 @@ def register_callbacks(app):
     ):
         """
         2) API 버튼 클릭 시
-           - 인자 없는 경우 → 즉시 API 요청
+           - 인자 없는 경우 → 즉시 전체 페이지 API 요청(fetch_all_pages)
            - 인자 있는 경우 → 입력 필드 + "API 요청 보내기" 버튼 표시
          3) "API 요청 보내기" 버튼 클릭 시
-           - 입력 받은 인자를 반영하여 API 요청
+           - 입력 받은 인자를 반영하여 전체 페이지 API 요청
         """
 
-        # 0) 사용자가 아무 버튼도 안 눌렀으면, 업데이트 없음
+        # 0) 사용자가 아무 버튼도 안 눌렀으면 업데이트 없음
         total_clicks_buttons = sum(api_button_n_clicks) if api_button_n_clicks else 0
         if total_clicks_buttons == 0 and (not send_request_n_clicks or send_request_n_clicks == 0):
             raise dash.exceptions.PreventUpdate
@@ -84,6 +83,7 @@ def register_callbacks(app):
         #
         if isinstance(triggered_id, dict) and triggered_id.get("type") == "api-button":
             selected_endpoint = triggered_id["index"]
+            # URL 내 ":파라미터명" 형식을 찾아서 인자(동적 파라미터)가 있는지 판별
             param_matches = re.findall(r":(\w+)", selected_endpoint)
             
             # A-1) 인자가 있으면 -> 입력 필드 및 "API 요청 보내기" 버튼 표시
@@ -98,28 +98,15 @@ def register_callbacks(app):
                             placeholder=f"{param} 값을 입력하세요"
                         )
                     )
-                # 인자 입력필드 / 엔드포인트 저장 / 버튼 보이기 / 테이블은 ""
+                # 인자 입력필드 / 엔드포인트 저장 / 버튼 보이기 / 결과 테이블은 ""
                 return html.Div(inputs), selected_endpoint, {"display": "block"}, ""
 
-            # A-2) 인자가 없으면 -> 즉시 API 요청
-            access_token = get_access_token()
-            if not access_token:
-                return "", selected_endpoint, {"display": "none"}, "❌ 토큰을 가져오지 못했습니다."
-            
-            full_url = f"{API_BASE_URL}{selected_endpoint}"
-            print(f"URL: {full_url}")  # 디버깅
-            response = requests.get(full_url, headers={"Authorization": f"Bearer {access_token}"})
-            # ✅ 상태 코드 확인
-            if response.status_code == 200:
-                data = response.json()
-                # ✅ 데이터가 비었는지 확인
-                if not data:
-                    table = "✅ 데이터가 없습니다."
-                else:
-                    table = generate_table(data)
-            else:
-                table = f"❌ 응답 실패 (코드 {response.status_code}): {response.text}"
-            
+            # A-2) 인자가 없으면 -> 즉시 전체 페이지 API 요청
+            #     (fetch_all_pages로 한꺼번에 데이터 가져옴)
+            table = fetch_all_pages(selected_endpoint)
+            if isinstance(table, str) and table.startswith("❌"):
+                # "❌"으로 시작하면 에러 메세지
+                return "", selected_endpoint, {"display": "none"}, table
             # 입력필드 없앰 / 엔드포인트 저장 / "API 요청 보내기" 숨김 / 테이블 표시
             return "", selected_endpoint, {"display": "none"}, table
 
@@ -127,8 +114,8 @@ def register_callbacks(app):
         # B. "API 요청 보내기" 버튼 클릭 감지
         #
         elif triggered_id == "send-request":
+            # 엔드포인트가 저장되지 않았다면 에러
             if not stored_endpoint:
-                # 엔드포인트가 저장되지 않은 경우
                 return "", "", {"display": "none"}, "❌ API를 선택하세요."
 
             # 인자가 있다면 입력값을 치환
@@ -137,23 +124,11 @@ def register_callbacks(app):
                 for item, val in zip(dynamic_input_ids, dynamic_input_values):
                     selected_endpoint = selected_endpoint.replace(f":{item['index']}", str(val))
 
-            access_token = get_access_token()
-            if not access_token:
-                return dash.no_update, stored_endpoint, {"display": "block"}, "❌ 토큰을 가져오지 못했습니다."
-            
-            full_url = f"{API_BASE_URL}{selected_endpoint}"
-            print(f"URL: {full_url}")  # 디버깅
-            response = requests.get(full_url, headers={"Authorization": f"Bearer {access_token}"})
-            # ✅ 상태 코드 확인
-            if response.status_code == 200:
-                data = response.json()
-                # ✅ 데이터가 비었는지 확인
-                if not data:
-                    table = "✅ 데이터가 없습니다."
-                else:
-                    table = generate_table(data)
-            else:
-                table = f"❌ 응답 실패 (코드 {response.status_code}): {response.text}"
+            # 전체 페이지 호출
+            table = fetch_all_pages(selected_endpoint)
+            if isinstance(table, str) and table.startswith("❌"):
+                # "❌"으로 시작하면 에러 메세지
+                return dash.no_update, stored_endpoint, {"display": "block"}, table
             
             # 기존 입력필드 유지 / 엔드포인트는 그대로 / 버튼 보이기 / 테이블 업데이트
             return dash.no_update, stored_endpoint, {"display": "block"}, table
