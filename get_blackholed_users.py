@@ -1,11 +1,9 @@
 import requests
 import pandas as pd
 from datetime import datetime
-import os
 import calendar
 from config import API_BASE_URL, TOKEN_URL, UID, SECRET
 from api_utils import get_access_token
-import urllib.parse  # URL 인코딩용
 
 # API 요청 URL 생성 (Google Apps Script의 makeQueryString 대체)
 def make_query_string(params, base_url):
